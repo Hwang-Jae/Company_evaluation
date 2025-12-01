@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>그룹웨어 솔루션 선정 평가 시스템 (Advanced)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .chart-container { 
+            position: relative; 
+            width: 100%; 
+            height: 350px; 
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            -webkit-print-color-adjust: exact;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 2px;
+            -webkit-print-color-adjust: exact;
+        }
+        .score-input {
+            transition: all 0.2s;
+        }
+        .score-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        /* Loader Animation */
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Print Specific Styles */
+        @media print {
+            @page { margin: 1cm; size: A4; }
+            body { background-color: white; -webkit-print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .print-break-inside { break-inside: avoid; }
+            .shadow-sm, .shadow-lg, .shadow-xl { box-shadow: none !important; }
+            .bg-slate-50, .bg-slate-100 { background-color: #f8fafc !important; }
+            input[type=text], input[type=number] {
+                border: none;
+                background: transparent;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <!-- Header & Project Context -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 print:static print:border-none">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between h-auto md:h-16 items-center py-3 md:py-0 gap-3">
+                
+                <!-- Logo & Title -->
+                <div class="flex items-center space-x-3 w-full md:w-auto">
+                    <div class="bg-blue-600 text-white p-2 rounded-lg shrink-0 print:text-blue-600 print:bg-white print:p-0">
+                        <i class="fa-solid fa-clipboard-check text-lg"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <h1 class="font-bold text-lg text-slate-900 leading-tight">업체 평가 시뮬레이션</h1>
+                        <span class="text-[10px] text-green-600 font-medium no-print"><i class="fa-solid fa-link text-[8px] mr-1"></i>Supabase DB 연동</span>
+                    </div>
+                </div>
+
+                <!-- Controls Area -->
+                <div class="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                    
+                    <!-- Project Context Input -->
+                    <div class="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200 w-full md:w-auto print:bg-transparent print:border-none">
+                        <div class="pl-3 text-xs text-slate-500 font-bold uppercase mr-2 shrink-0">Project:</div>
+                        <input type="text" id="project-name" placeholder="프로젝트명 (예: Project_A)" 
+                               class="bg-transparent text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none w-full md:w-32 print:w-auto"
+                               onkeypress="handleEnter(event, 'loadProject')">
+                        <button onclick="loadProjectData()" id="btn-load-project" class="bg-white hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded shadow-sm text-xs font-bold ml-2 transition-colors border border-slate-200 whitespace-nowrap no-print">
+                            <i class="fa-solid fa-rotate mr-1"></i>설정 로드
+                        </button>
+                    </div>
+
+                    <!-- Print Button -->
+                    <button onclick="window.print()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors no-print whitespace-nowrap w-full md:w-auto">
+                        <i class="fa-solid fa-print mr-2"></i>보고서 출력
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- LEFT COLUMN: Configuration (Weights & Baselines) -->
+            <div class="lg:col-span-4 space-y-6 print-break-inside">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden print:border print:border-slate-300">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                    
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-sliders text-slate-400 text-sm"></i> 평가 기준 설정
+                        </h3>
+                        <button onclick="saveProjectConfig()" id="btn-save-config" class="text-xs bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition no-print font-medium shadow-sm">
+                            <i class="fa-solid fa-floppy-disk mr-1"></i>설정 저장
+                        </button>
+                    </div>
+                    
+                    <p class="text-xs text-slate-500 mb-6 bg-slate-50 p-3 rounded no-print border border-slate-100">
+                        <i class="fa-solid fa-circle-info mr-1 text-blue-500"></i>
+                        항목별 <strong>가중치(%)</strong>와 <strong>목표 기준 점수(점)</strong>를 설정하여 저장하면, 다른 평가자와 기준을 공유할 수 있습니다.
+                    </p>
+
+                    <div class="space-y-6">
+                        <!-- Helper Headers -->
+                        <div class="flex justify-between text-xs font-bold text-slate-400 px-1 border-b border-slate-100 pb-2">
+                            <span>평가 항목</span>
+                            <div class="flex gap-4">
+                                <span class="w-12 text-center">가중치</span>
+                                <span class="w-12 text-center">기준점</span>
+                            </div>
+                        </div>
+
+                        <!-- Config Item Template -->
+                        <div class="group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-sm text-slate-700">기능/확장성</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold text-blue-600 w-12 text-center bg-blue-50 rounded py-0.5" id="val-func">30%</span>
+                                    <input type="number" id="base-func" value="8" min="0" max="10" class="w-12 text-center text-sm font-bold text-slate-600 bg-slate-100 rounded py-0.5 border border-transparent focus:border-blue-400 focus:bg-white focus:outline-none" title="목표 기준 점수">
+                                </div>
+                            </div>
+                            <input type="range" id="range-func" min="0" max="100" value="30" oninput="updateDashboard()" class="accent-blue-600 w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div class="group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-sm text-slate-700">기술/보안성</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold text-blue-600 w-12 text-center bg-blue-50 rounded py-0.5" id="val-tech">20%</span>
+                                    <input type="number" id="base-tech" value="8" min="0" max="10" class="w-12 text-center text-sm font-bold text-slate-600 bg-slate-100 rounded py-0.5 border border-transparent focus:border-blue-400 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+                            <input type="range" id="range-tech" min="0" max="100" value="20" oninput="updateDashboard()" class="accent-blue-600 w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div class="group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-sm text-slate-700">비용 적정성</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold text-blue-600 w-12 text-center bg-blue-50 rounded py-0.5" id="val-cost">30%</span>
+                                    <input type="number" id="base-cost" value="7" min="0" max="10" class="w-12 text-center text-sm font-bold text-slate-600 bg-slate-100 rounded py-0.5 border border-transparent focus:border-blue-400 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+                            <input type="range" id="range-cost" min="0" max="100" value="30" oninput="updateDashboard()" class="accent-blue-600 w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div class="group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-sm text-slate-700">유지보수/지원</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold text-blue-600 w-12 text-center bg-blue-50 rounded py-0.5" id="val-support">10%</span>
+                                    <input type="number" id="base-support" value="8" min="0" max="10" class="w-12 text-center text-sm font-bold text-slate-600 bg-slate-100 rounded py-0.5 border border-transparent focus:border-blue-400 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+                            <input type="range" id="range-support" min="0" max="100" value="10" oninput="updateDashboard()" class="accent-blue-600 w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div class="group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-sm text-slate-700">UI/UX 편의성</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold text-blue-600 w-12 text-center bg-blue-50 rounded py-0.5" id="val-ux">10%</span>
+                                    <input type="number" id="base-ux" value="9" min="0" max="10" class="w-12 text-center text-sm font-bold text-slate-600 bg-slate-100 rounded py-0.5 border border-transparent focus:border-blue-400 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+                            <input type="range" id="range-ux" min="0" max="100" value="10" oninput="updateDashboard()" class="accent-blue-600 w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-500">Total Weight</span>
+                            <span class="text-sm font-bold bg-slate-800 text-white px-3 py-1 rounded-full print:bg-transparent print:text-slate-800 print:border print:border-slate-300" id="total-weight">100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Result -->
+                <div class="bg-gradient-to-br from-slate-800 to-slate-900 text-white p-5 rounded-xl shadow-lg print:bg-white print:text-slate-800 print:border print:border-slate-800">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider print:text-slate-500">Simulation Outcome</h4>
+                    <div id="recommendation-text" class="text-lg font-bold leading-snug">
+                        -
+                    </div>
+                    <div id="recommendation-reason" class="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-700 print:text-slate-600 print:border-slate-300">
+                        점수를 입력하면 1위 업체가 자동 선정됩니다.
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER & RIGHT: Scoring & Visuals -->
+            <div class="lg:col-span-8 space-y-6 print-break-inside">
+                <!-- Evaluator Context -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 print:border-none print:shadow-none print:p-0 print:mb-4">
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                        <div class="bg-indigo-50 p-2.5 rounded-lg text-indigo-600 print:hidden">
+                            <i class="fa-solid fa-user-tag"></i>
+                        </div>
+                        <div class="flex flex-col w-full">
+                            <label class="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Evaluator Info</label>
+                            <input type="text" id="evaluator-id" placeholder="평가자 이름/사번 입력" 
+                                   class="border-b border-slate-300 focus:border-indigo-500 focus:outline-none text-base font-bold text-slate-800 py-1 w-full sm:w-64 bg-transparent print:border-none print:w-auto print:p-0"
+                                   onkeypress="handleEnter(event, 'loadScore')">
+                        </div>
+                    </div>
+                    <div class="flex gap-2 w-full sm:w-auto no-print">
+                        <button onclick="loadEvaluatorScores()" id="btn-load-score" class="flex-1 sm:flex-none bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-4 py-2 rounded-lg text-xs font-bold transition-colors">
+                            <i class="fa-solid fa-cloud-arrow-down mr-1"></i>점수 불러오기
+                        </button>
+                        <button onclick="saveEvaluatorScores()" id="btn-save-score" class="flex-1 sm:flex-none bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-md shadow-indigo-200">
+                            <i class="fa-solid fa-check mr-1"></i>점수 저장
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scoring Table -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden print:border print:border-slate-300">
+                    <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 print:bg-slate-100">
+                        <h3 class="font-bold text-slate-800 text-sm flex items-center">
+                            <i class="fa-solid fa-table-list mr-2 text-slate-400"></i> 업체별 상세 채점표
+                        </h3>
+                        <span class="text-[10px] text-slate-400 no-print">* 10점 만점 기준</span>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-center">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-xs print:bg-slate-100">
+                                <tr>
+                                    <th class="px-4 py-3 text-left w-1/4">평가 항목</th>
+                                    <th class="px-4 py-3 text-blue-700 border-b-2 border-blue-200 w-1/4">
+                                        <div class="font-black text-sm">A사</div>
+                                        <div class="text-[10px] opacity-70">SaaS</div>
+                                    </th>
+                                    <th class="px-4 py-3 text-indigo-700 border-b-2 border-indigo-200 w-1/4">
+                                        <div class="font-black text-sm">B사</div>
+                                        <div class="text-[10px] opacity-70">SI</div>
+                                    </th>
+                                    <th class="px-4 py-3 text-teal-700 border-b-2 border-teal-200 w-1/4">
+                                        <div class="font-black text-sm">C사</div>
+                                        <div class="text-[10px] opacity-70">Hybrid</div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 print:divide-slate-200">
+                                <tr id="row-func">
+                                    <td class="px-4 py-3 text-left font-medium text-slate-700">기능/확장성</td>
+                                    <td class="p-2"><input type="number" id="s-a-func" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-b-func" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-c-func" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                </tr>
+                                <tr id="row-tech">
+                                    <td class="px-4 py-3 text-left font-medium text-slate-700">기술/보안성</td>
+                                    <td class="p-2"><input type="number" id="s-a-tech" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-b-tech" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-c-tech" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                </tr>
+                                <tr id="row-cost">
+                                    <td class="px-4 py-3 text-left font-medium text-slate-700">비용 적정성</td>
+                                    <td class="p-2"><input type="number" id="s-a-cost" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-b-cost" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-c-cost" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                </tr>
+                                <tr id="row-support">
+                                    <td class="px-4 py-3 text-left font-medium text-slate-700">유지보수/지원</td>
+                                    <td class="p-2"><input type="number" id="s-a-support" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-b-support" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-c-support" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                </tr>
+                                <tr id="row-ux">
+                                    <td class="px-4 py-3 text-left font-medium text-slate-700">UI/UX 편의성</td>
+                                    <td class="p-2"><input type="number" id="s-a-ux" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-b-ux" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                    <td class="p-2"><input type="number" id="s-c-ux" value="0" max="10" class="score-input w-full text-center border border-slate-200 rounded p-2 print:border-none font-semibold text-slate-700" onchange="updateDashboard()"></td>
+                                </tr>
+                                <!-- Total Row -->
+                                <tr class="bg-slate-800 text-white font-bold border-t-2 border-slate-300 print:bg-slate-800 print:text-white print-color-adjust">
+                                    <td class="px-4 py-4 text-left">종합 점수 (Weighted)</td>
+                                    <td class="text-lg text-blue-300" id="total-a">0.0</td>
+                                    <td class="text-lg text-indigo-300" id="total-b">0.0</td>
+                                    <td class="text-lg text-teal-300" id="total-c">0.0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Visualizations -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Final Ranking Bar Chart -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 print:border print:border-slate-300">
+                        <h3 class="font-bold text-slate-800 text-sm mb-4 text-center">최종 순위 (Ranking)</h3>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="barChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Radar Chart -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 print:border print:border-slate-300">
+                        <h3 class="font-bold text-slate-800 text-sm mb-4 text-center">역량 비교 (Radar)</h3>
+                        <div class="chart-container" style="height: 250px;">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-xs text-slate-400 text-center no-print">
+                    * 모든 데이터는 Supabase DB에 암호화되어 저장됩니다.
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-6 py-3 rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center no-print">
+        <i class="fa-solid fa-circle-check text-green-400 mr-3"></i>
+        <span id="toast-msg">저장되었습니다.</span>
+    </div>
+
+    <script>
+        // --- Supabase Configuration ---
+        const SUPABASE_URL = 'https://xtcoovvghttnwxwdttqa.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0Y29vdnZnaHR0bnd4d2R0dHFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzMDE3NzYsImV4cCI6MjA3Njg3Nzc3Nn0.Fmn9b1FoyklF5jw0oiLKp4JT1zRTY9iq9hiCog6HHpE';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- Init Data ---
+        let radarChartInstance = null;
+        let barChartInstance = null;
+
+        const vendors = [
+            { id: 'a', name: 'A사', type: 'SaaS', color: 'rgba(59, 130, 246, 0.5)', borderColor: '#3b82f6' },
+            { id: 'b', name: 'B사', type: 'SI', color: 'rgba(99, 102, 241, 0.5)', borderColor: '#6366f1' },
+            { id: 'c', name: 'C사', type: 'Hybrid', color: 'rgba(20, 184, 166, 0.5)', borderColor: '#14b8a6' }
+        ];
+
+        const categories = ['func', 'tech', 'cost', 'support', 'ux'];
+        const categoryLabels = ['기능/확장', '기술/보안', '비용', '지원', 'UX'];
+
+        // --- Core Calculation Functions ---
+
+        function getConfigData() {
+            // Returns both weights and baselines
+            return {
+                weights: {
+                    func: parseInt(document.getElementById('range-func').value),
+                    tech: parseInt(document.getElementById('range-tech').value),
+                    cost: parseInt(document.getElementById('range-cost').value),
+                    support: parseInt(document.getElementById('range-support').value),
+                    ux: parseInt(document.getElementById('range-ux').value)
+                },
+                baselines: {
+                    func: parseInt(document.getElementById('base-func').value),
+                    tech: parseInt(document.getElementById('base-tech').value),
+                    cost: parseInt(document.getElementById('base-cost').value),
+                    support: parseInt(document.getElementById('base-support').value),
+                    ux: parseInt(document.getElementById('base-ux').value)
+                }
+            };
+        }
+
+        function setConfigData(config) {
+            if(!config) return;
+            const w = config.weights || {};
+            const b = config.baselines || {};
+
+            // Set Weights
+            document.getElementById('range-func').value = w.func || 30;
+            document.getElementById('range-tech').value = w.tech || 20;
+            document.getElementById('range-cost').value = w.cost || 30;
+            document.getElementById('range-support').value = w.support || 10;
+            document.getElementById('range-ux').value = w.ux || 10;
+
+            // Set Baselines
+            document.getElementById('base-func').value = b.func || 8;
+            document.getElementById('base-tech').value = b.tech || 8;
+            document.getElementById('base-cost').value = b.cost || 7;
+            document.getElementById('base-support').value = b.support || 8;
+            document.getElementById('base-ux').value = b.ux || 9;
+        }
+
+        function getScores() {
+            // Structuring data: { vendor_id: { category_id: score } }
+            let scores = {};
+            vendors.forEach(v => {
+                scores[v.id] = {};
+                categories.forEach(cat => {
+                    scores[v.id][cat] = parseFloat(document.getElementById(`s-${v.id}-${cat}`).value) || 0;
+                });
+            });
+            return scores;
+        }
+
+        function setScores(scores) {
+            if(!scores) return;
+            vendors.forEach(v => {
+                if(scores[v.id]) {
+                    categories.forEach(cat => {
+                        document.getElementById(`s-${v.id}-${cat}`).value = scores[v.id][cat] || 0;
+                    });
+                }
+            });
+        }
+
+        function calculateWeightedTotals(weights, scores) {
+            const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+            
+            // UI Update for Slider Values
+            document.getElementById('val-func').innerText = weights.func + '%';
+            document.getElementById('val-tech').innerText = weights.tech + '%';
+            document.getElementById('val-cost').innerText = weights.cost + '%';
+            document.getElementById('val-support').innerText = weights.support + '%';
+            document.getElementById('val-ux').innerText = weights.ux + '%';
+            document.getElementById('total-weight').innerText = `${totalWeight}%`;
+
+            if(totalWeight !== 100) {
+                document.getElementById('total-weight').classList.replace('bg-slate-800', 'bg-red-600');
+            } else {
+                document.getElementById('total-weight').classList.replace('bg-red-600', 'bg-slate-800');
+            }
+
+            let totals = {};
+            vendors.forEach(v => {
+                let sum = 0;
+                categories.forEach(cat => {
+                    const effectiveWeight = (weights[cat] / totalWeight);
+                    sum += scores[v.id][cat] * effectiveWeight * 10; 
+                });
+                totals[v.id] = sum.toFixed(1);
+            });
+            return totals;
+        }
+
+        function updateRecommendation(totals) {
+            const sorted = Object.entries(totals).sort(([,a], [,b]) => b - a);
+            const winnerId = sorted[0][0];
+            const winnerObj = vendors.find(v => v.id === winnerId);
+            const winnerName = winnerObj ? winnerObj.name : '-';
+            
+            const runnerUpId = sorted[1][0];
+            const diff = (sorted[0][1] - sorted[1][1]).toFixed(1);
+
+            const weights = getConfigData().weights;
+            const maxWeightKey = Object.keys(weights).reduce((a, b) => weights[a] > weights[b] ? a : b);
+            const reasonMap = {
+                func: '기능성', tech: '기술/보안', cost: '비용', support: '지원', ux: '편의성'
+            };
+
+            const recText = document.getElementById('recommendation-text');
+            const recReason = document.getElementById('recommendation-reason');
+
+            if(totals[winnerId] == 0) {
+                recText.innerHTML = "-";
+                recReason.innerHTML = "점수를 입력해주세요.";
+                return;
+            }
+
+            recText.innerHTML = `
+                현재 1위: <span class="${winnerId === 'a' ? 'text-blue-400' : winnerId === 'b' ? 'text-indigo-400' : 'text-teal-400'}">${winnerName} (${winnerObj.type})</span>
+            `;
+            
+            recReason.innerHTML = `
+                <strong>'${reasonMap[maxWeightKey]}'</strong> 가중치가 높은 상황에서<br>
+                2위와 <strong>${diff}점</strong> 차이로 우세합니다.
+            `;
+        }
+
+        function updateDashboard() {
+            const config = getConfigData();
+            const scores = getScores();
+            const totals = calculateWeightedTotals(config.weights, scores);
+
+            vendors.forEach(v => {
+                document.getElementById(`total-${v.id}`).innerText = totals[v.id];
+            });
+
+            updateRecommendation(totals);
+            updateCharts(scores, totals);
+        }
+
+        function updateCharts(scores, totals) {
+            // Radar Data
+            const radarDatasets = vendors.map(v => ({
+                label: v.name,
+                data: categories.map(cat => scores[v.id][cat]),
+                fill: true,
+                backgroundColor: v.color,
+                borderColor: v.borderColor,
+                pointBackgroundColor: v.borderColor,
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: v.borderColor
+            }));
+
+            // Bar Data
+            const barData = vendors.map(v => totals[v.id]);
+            const barColors = vendors.map(v => v.borderColor);
+
+            // Radar Chart
+            const ctxRadar = document.getElementById('radarChart').getContext('2d');
+            if (radarChartInstance) radarChartInstance.destroy();
+
+            radarChartInstance = new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: categoryLabels,
+                    datasets: radarDatasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { display: true },
+                            suggestedMin: 0, suggestedMax: 10,
+                            ticks: { display: false }
+                        }
+                    },
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+                }
+            });
+
+            // Bar Chart
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: vendors.map(v => v.name),
+                    datasets: [{
+                        label: '종합 점수',
+                        data: barData,
+                        backgroundColor: barColors,
+                        borderRadius: 6,
+                        barThickness: 30
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { max: 100 } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // --- Supabase Functions ---
+
+        function handleEnter(e, action) {
+            if (e.key === 'Enter') {
+                if(action === 'loadProject') loadProjectData();
+                if(action === 'loadScore') loadEvaluatorScores();
+            }
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toast-msg');
+            msg.innerText = message;
+            
+            if(isError) {
+                toast.querySelector('i').className = 'fa-solid fa-circle-exclamation text-red-400 mr-3';
+            } else {
+                toast.querySelector('i').className = 'fa-solid fa-circle-check text-green-400 mr-3';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function setLoading(btnId, isLoading, text) {
+            const btn = document.getElementById(btnId);
+            if(isLoading) {
+                btn.dataset.originalText = btn.innerHTML;
+                btn.innerHTML = `<span class="loader align-middle mr-2"></span>${text}`;
+                btn.disabled = true;
+            } else {
+                btn.innerHTML = btn.dataset.originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // 1. Project Config (Weights + Baselines)
+        async function loadProjectData() {
+            const projectName = document.getElementById('project-name').value.trim();
+            if (!projectName) { showToast("프로젝트명을 입력하세요.", true); return; }
+
+            setLoading('btn-load-project', true, "로드");
+
+            try {
+                // Fetch 'config' column which contains weights & baselines
+                const { data, error } = await supabase
+                    .from('project_configs')
+                    .select('config')
+                    .eq('project_name', projectName)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') throw error;
+
+                if (data && data.config) {
+                    setConfigData(data.config);
+                    updateDashboard();
+                    showToast(`'${projectName}' 설정 로드 완료`);
+                } else {
+                    showToast(`'${projectName}' 설정이 없어 기본값을 사용합니다.`, true);
+                    // Reset to defaults
+                    document.getElementById('range-func').value = 30;
+                    // ... (rest of defaults handled by initial HTML values)
+                    updateDashboard();
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("로드 실패: " + err.message, true);
+            } finally {
+                setLoading('btn-load-project', false);
+            }
+        }
+
+        async function saveProjectConfig() {
+            const projectName = document.getElementById('project-name').value.trim();
+            if (!projectName) { showToast("프로젝트명을 입력하세요.", true); return; }
+            
+            setLoading('btn-save-config', true, "저장");
+
+            const configData = getConfigData(); // { weights: {...}, baselines: {...} }
+
+            try {
+                const { error } = await supabase
+                    .from('project_configs')
+                    .upsert({ 
+                        project_name: projectName, 
+                        config: configData,
+                        updated_at: new Date()
+                    });
+
+                if (error) throw error;
+                showToast(`'${projectName}' 기준이 저장되었습니다.`);
+            } catch (err) {
+                console.error(err);
+                showToast("저장 실패: " + err.message, true);
+            } finally {
+                setLoading('btn-save-config', false);
+            }
+        }
+
+        // 2. Evaluator Scores (Detailed Breakdown)
+        async function loadEvaluatorScores() {
+            const projectName = document.getElementById('project-name').value.trim();
+            const evaluatorId = document.getElementById('evaluator-id').value.trim();
+
+            if (!projectName) { showToast("프로젝트명을 입력하세요.", true); return; }
+            if (!evaluatorId) { showToast("평가자 ID를 입력하세요.", true); return; }
+
+            setLoading('btn-load-score', true, "조회");
+
+            try {
+                const { data, error } = await supabase
+                    .from('vendor_evaluations')
+                    .select('scores')
+                    .eq('project_name', projectName)
+                    .eq('evaluator_id', evaluatorId)
+                    .single();
+
+                if (error && error.code !== 'PGRST116') throw error;
+
+                if (data) {
+                    setScores(data.scores);
+                    updateDashboard();
+                    showToast(`${evaluatorId}님의 점수 로드 완료`);
+                } else {
+                    showToast(`${evaluatorId}님의 기록이 없습니다.`, true);
+                    document.querySelectorAll('.score-input').forEach(el => el.value = 0);
+                    updateDashboard();
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("조회 실패: " + err.message, true);
+            } finally {
+                setLoading('btn-load-score', false);
+            }
+        }
+
+        async function saveEvaluatorScores() {
+            const projectName = document.getElementById('project-name').value.trim();
+            const evaluatorId = document.getElementById('evaluator-id').value.trim();
+
+            if (!projectName) { showToast("프로젝트명을 입력하세요.", true); return; }
+            if (!evaluatorId) { showToast("평가자 ID를 입력하세요.", true); return; }
+
+            setLoading('btn-save-score', true, "저장");
+
+            const scores = getScores(); // { a: { func: 8... }, b: { ... } }
+
+            try {
+                const { error } = await supabase
+                    .from('vendor_evaluations')
+                    .upsert({ 
+                        project_name: projectName,
+                        evaluator_id: evaluatorId, 
+                        scores: scores,
+                        updated_at: new Date()
+                    });
+
+                if (error) throw error;
+                showToast(`${evaluatorId}님의 점수가 저장되었습니다.`);
+            } catch (err) {
+                console.error(err);
+                showToast("저장 실패: " + err.message, true);
+            } finally {
+                setLoading('btn-save-score', false);
+            }
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDashboard();
+        });
+
+    </script>
+</body>
+</html>
